@@ -16,8 +16,8 @@ func makeFrame(txidByte0 byte, payload []byte) *Frame {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 func TestHeaderSize(t *testing.T) {
-	if HeaderSize != 104 {
-		t.Errorf("HeaderSize = %d, want 104", HeaderSize)
+	if HeaderSize != 108 {
+		t.Errorf("HeaderSize = %d, want 108", HeaderSize)
 	}
 }
 
@@ -53,13 +53,13 @@ func TestRoundTrip(t *testing.T) {
 		f.SubtreeID[i] = byte(i + 1)
 	}
 
-	buf := make([]byte, 108+len(payload)) // Payload starts at offset 108
+	buf := make([]byte, HeaderSize+len(payload))
 	n, err := Encode(f, buf)
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
-	if n != 108+len(payload) {
-		t.Fatalf("Encode returned %d bytes, want %d", n, 108+len(payload))
+	if n != HeaderSize+len(payload) {
+		t.Fatalf("Encode returned %d bytes, want %d", n, HeaderSize+len(payload))
 	}
 
 	got, err := Decode(buf[:n])
@@ -98,7 +98,7 @@ func TestRoundTripWithSenderID(t *testing.T) {
 		f.SenderID[i] = byte(0x20 + i)
 	}
 
-	buf := make([]byte, 108+len(payload)) // Payload starts at offset 108
+	buf := make([]byte, HeaderSize+len(payload))
 	if _, err := Encode(f, buf); err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
@@ -159,8 +159,8 @@ func TestFieldOffsets(t *testing.T) {
 	if payLen != 1 {
 		t.Errorf("buf[104:108] (PayLen) = %d, want 1", payLen)
 	}
-	if buf[108] != 0xFF {
-		t.Errorf("buf[108] (Payload[0]) = 0x%02X, want 0xFF", buf[108])
+	if buf[HeaderSize] != 0xFF {
+		t.Errorf("buf[%d] (Payload[0]) = 0x%02X, want 0xFF", HeaderSize, buf[HeaderSize])
 	}
 }
 
@@ -173,8 +173,8 @@ func TestEmptyPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Encode empty payload: %v", err)
 	}
-	if n != 108 { // v2 header up to payload offset
-		t.Errorf("n = %d, want 108", n)
+	if n != HeaderSize {
+		t.Errorf("n = %d, want %d", n, HeaderSize)
 	}
 	got, err := Decode(buf[:n])
 	if err != nil {
@@ -334,11 +334,11 @@ func TestEncodeErrTooLarge(t *testing.T) {
 }
 
 func TestDecodeErrTooLarge(t *testing.T) {
-	buf := make([]byte, HeaderSize+8) // Extra space for write operation
+	buf := make([]byte, HeaderSize)
 	buf[0], buf[1], buf[2], buf[3] = 0xE3, 0xE1, 0xF3, 0xE8
 	buf[6] = FrameVerV2
 	// Write a payLen that exceeds MaxPayload into bytes 104–107.
-	binary.BigEndian.PutUint32(buf[104:108], uint32(MaxPayload+1))
+	binary.BigEndian.PutUint32(buf[104:HeaderSize], uint32(MaxPayload+1))
 	_, err := Decode(buf)
 	if err != ErrTooLarge {
 		t.Errorf("want ErrTooLarge, got %v", err)

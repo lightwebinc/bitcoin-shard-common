@@ -77,9 +77,9 @@ const (
 	// HeaderSizeV1 is the fixed size of the v1 frame header in bytes.
 	HeaderSizeV1 = 44
 
-	// HeaderSize is the fixed size of the v2 frame header in bytes.
-	// Kept as HeaderSize (not HeaderSizeV2) so callers need no rename.
-	HeaderSize = 104
+	// HeaderSize is the total size of the v2 frame header in bytes,
+	// including the 4-byte PayLen field. Payload begins at offset HeaderSize.
+	HeaderSize = 108
 
 	// MaxPayload is the maximum accepted payload size. BSV's consensus rule
 	// caps individual transactions well below this; the limit guards against
@@ -126,7 +126,7 @@ func Encode(f *Frame, buf []byte) (int, error) {
 	if len(f.Payload) > MaxPayload {
 		return 0, ErrTooLarge
 	}
-	total := 108 + len(f.Payload) // Payload starts at offset 108 in v2
+	total := HeaderSize + len(f.Payload)
 	if len(buf) < total {
 		return 0, fmt.Errorf("frame: buffer too small (%d bytes, need %d)", len(buf), total)
 	}
@@ -199,16 +199,16 @@ func decodeV1(buf []byte) (*Frame, error) {
 	return f, nil
 }
 
-// decodeV2 parses the 104-byte v2 header.
+// decodeV2 parses the 108-byte v2 header.
 func decodeV2(buf []byte) (*Frame, error) {
 	if len(buf) < HeaderSize {
 		return nil, ErrTooShort
 	}
-	payLen := int(binary.BigEndian.Uint32(buf[104:108]))
+	payLen := int(binary.BigEndian.Uint32(buf[104:HeaderSize]))
 	if payLen > MaxPayload {
 		return nil, ErrTooLarge
 	}
-	if len(buf)-108 < payLen {
+	if len(buf)-HeaderSize < payLen {
 		return nil, io.ErrUnexpectedEOF
 	}
 	f := &Frame{Version: FrameVerV2}
@@ -217,6 +217,6 @@ func decodeV2(buf []byte) (*Frame, error) {
 	f.ShardSeqNum = binary.BigEndian.Uint64(buf[48:56])
 	copy(f.SubtreeID[:], buf[56:88])
 	copy(f.SenderID[:], buf[88:104])
-	f.Payload = buf[108 : 108+payLen]
+	f.Payload = buf[HeaderSize : HeaderSize+payLen]
 	return f, nil
 }
