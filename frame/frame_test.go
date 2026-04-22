@@ -16,8 +16,8 @@ func makeFrame(txidByte0 byte, payload []byte) *Frame {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 func TestHeaderSize(t *testing.T) {
-	if HeaderSize != 100 {
-		t.Errorf("HeaderSize = %d, want 100", HeaderSize)
+	if HeaderSize != 104 {
+		t.Errorf("HeaderSize = %d, want 104", HeaderSize)
 	}
 }
 
@@ -46,19 +46,20 @@ func TestRoundTrip(t *testing.T) {
 	f := &Frame{
 		Payload:     payload,
 		ShardSeqNum: 0x0102030405060708,
+		SequenceID:  0xAABBCCDDEEFF0011,
 	}
 	f.TxID[0] = 0xAB
 	for i := range f.SubtreeID {
 		f.SubtreeID[i] = byte(i + 1)
 	}
 
-	buf := make([]byte, HeaderSize+len(payload))
+	buf := make([]byte, 108+len(payload)) // Payload starts at offset 108
 	n, err := Encode(f, buf)
 	if err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
-	if n != HeaderSize+len(payload) {
-		t.Fatalf("Encode returned %d bytes, want %d", n, HeaderSize+len(payload))
+	if n != 108+len(payload) {
+		t.Fatalf("Encode returned %d bytes, want %d", n, 108+len(payload))
 	}
 
 	got, err := Decode(buf[:n])
@@ -77,6 +78,9 @@ func TestRoundTrip(t *testing.T) {
 	if got.SenderID != f.SenderID {
 		t.Errorf("SenderID mismatch: got %x, want %x", got.SenderID, f.SenderID)
 	}
+	if got.SequenceID != f.SequenceID {
+		t.Errorf("SequenceID = %d, want %d", got.SequenceID, f.SequenceID)
+	}
 	if !bytes.Equal(got.Payload, payload) {
 		t.Errorf("Payload mismatch: got %q, want %q", got.Payload, payload)
 	}
@@ -87,13 +91,14 @@ func TestRoundTripWithSenderID(t *testing.T) {
 	f := &Frame{
 		Payload:     payload,
 		ShardSeqNum: 42,
+		SequenceID:  0x1122334455667788,
 	}
 	f.TxID[0] = 0xCC
 	for i := range f.SenderID {
 		f.SenderID[i] = byte(0x20 + i)
 	}
 
-	buf := make([]byte, HeaderSize+len(payload))
+	buf := make([]byte, 108+len(payload)) // Payload starts at offset 108
 	if _, err := Encode(f, buf); err != nil {
 		t.Fatalf("Encode: %v", err)
 	}
@@ -104,6 +109,9 @@ func TestRoundTripWithSenderID(t *testing.T) {
 	if got.SenderID != f.SenderID {
 		t.Errorf("SenderID mismatch: got %x, want %x", got.SenderID, f.SenderID)
 	}
+	if got.SequenceID != f.SequenceID {
+		t.Errorf("SequenceID mismatch: got %d, want %d", got.SequenceID, f.SequenceID)
+	}
 }
 
 // ── Field offsets ─────────────────────────────────────────────────────────────
@@ -111,6 +119,7 @@ func TestRoundTripWithSenderID(t *testing.T) {
 func TestFieldOffsets(t *testing.T) {
 	f := &Frame{
 		ShardSeqNum: 0xDEADBEEFCAFEBABE,
+		SequenceID:  0x123456789ABCDEF0,
 	}
 	f.TxID[0] = 0x11
 	for i := range f.SubtreeID {
@@ -118,7 +127,7 @@ func TestFieldOffsets(t *testing.T) {
 	}
 	f.Payload = []byte{0xFF}
 
-	buf := make([]byte, HeaderSize+1)
+	buf := make([]byte, HeaderSize+5) // Extra space for payload checks
 	if _, err := Encode(f, buf); err != nil {
 		t.Fatal(err)
 	}
@@ -132,23 +141,26 @@ func TestFieldOffsets(t *testing.T) {
 	if buf[8] != 0x11 {
 		t.Errorf("buf[8] (TxID[0]) = 0x%02X, want 0x11", buf[8])
 	}
-	if binary.BigEndian.Uint64(buf[40:48]) != 0xDEADBEEFCAFEBABE {
-		t.Errorf("buf[40:48] (ShardSeqNum) mismatch")
+	if binary.BigEndian.Uint64(buf[40:48]) != 0x123456789ABCDEF0 {
+		t.Errorf("buf[40:48] (SequenceID) mismatch")
 	}
-	if buf[48] != 0xCC {
-		t.Errorf("buf[48] (SubtreeID[0]) = 0x%02X, want 0xCC", buf[48])
+	if binary.BigEndian.Uint64(buf[48:56]) != 0xDEADBEEFCAFEBABE {
+		t.Errorf("buf[48:56] (ShardSeqNum) mismatch")
 	}
-	for i := 80; i < 96; i++ {
+	if buf[56] != 0xCC {
+		t.Errorf("buf[56] (SubtreeID[0]) = 0x%02X, want 0xCC", buf[56])
+	}
+	for i := 88; i < 104; i++ {
 		if buf[i] != 0x00 {
-			t.Errorf("buf[%d] (SenderID[%d]) = 0x%02X, want 0x00", i, i-80, buf[i])
+			t.Errorf("buf[%d] (SenderID[%d]) = 0x%02X, want 0x00", i, i-88, buf[i])
 		}
 	}
-	payLen := binary.BigEndian.Uint32(buf[96:100])
+	payLen := binary.BigEndian.Uint32(buf[104:108])
 	if payLen != 1 {
-		t.Errorf("buf[96:100] (PayLen) = %d, want 1", payLen)
+		t.Errorf("buf[104:108] (PayLen) = %d, want 1", payLen)
 	}
-	if buf[100] != 0xFF {
-		t.Errorf("buf[100] (Payload[0]) = 0x%02X, want 0xFF", buf[100])
+	if buf[108] != 0xFF {
+		t.Errorf("buf[108] (Payload[0]) = 0x%02X, want 0xFF", buf[108])
 	}
 }
 
@@ -156,13 +168,13 @@ func TestFieldOffsets(t *testing.T) {
 
 func TestEmptyPayload(t *testing.T) {
 	f := makeFrame(0x77, []byte{})
-	buf := make([]byte, HeaderSize)
+	buf := make([]byte, HeaderSize+8) // Extra space for copy operation
 	n, err := Encode(f, buf)
 	if err != nil {
 		t.Fatalf("Encode empty payload: %v", err)
 	}
-	if n != HeaderSize {
-		t.Errorf("n = %d, want %d", n, HeaderSize)
+	if n != 108 { // v2 header up to payload offset
+		t.Errorf("n = %d, want 108", n)
 	}
 	got, err := Decode(buf[:n])
 	if err != nil {
@@ -220,6 +232,9 @@ func TestDecodeV1ZeroedV2Fields(t *testing.T) {
 	}
 	if f.SenderID != ([16]byte{}) {
 		t.Error("SenderID should be all zeros for v1")
+	}
+	if f.SequenceID != 0 {
+		t.Errorf("SequenceID = %d, want 0", f.SequenceID)
 	}
 }
 
@@ -294,7 +309,7 @@ func TestDecodeErrBadVer(t *testing.T) {
 
 func TestDecodeErrTruncated(t *testing.T) {
 	f := makeFrame(0x01, []byte("payload"))
-	buf := make([]byte, HeaderSize+len(f.Payload))
+	buf := make([]byte, 108+len(f.Payload)) // Payload starts at offset 108
 	n, _ := Encode(f, buf)
 	_, err := Decode(buf[:n-1])
 	if err != io.ErrUnexpectedEOF {
@@ -319,11 +334,11 @@ func TestEncodeErrTooLarge(t *testing.T) {
 }
 
 func TestDecodeErrTooLarge(t *testing.T) {
-	buf := make([]byte, HeaderSize)
+	buf := make([]byte, HeaderSize+8) // Extra space for write operation
 	buf[0], buf[1], buf[2], buf[3] = 0xE3, 0xE1, 0xF3, 0xE8
 	buf[6] = FrameVerV2
-	// Write a payLen that exceeds MaxPayload into bytes 96–99.
-	binary.BigEndian.PutUint32(buf[96:100], uint32(MaxPayload+1))
+	// Write a payLen that exceeds MaxPayload into bytes 104–107.
+	binary.BigEndian.PutUint32(buf[104:108], uint32(MaxPayload+1))
 	_, err := Decode(buf)
 	if err != ErrTooLarge {
 		t.Errorf("want ErrTooLarge, got %v", err)

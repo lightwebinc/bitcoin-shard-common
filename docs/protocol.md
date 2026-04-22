@@ -10,7 +10,7 @@ correctly.
 
 ## 2. v2 Frame Format (current)
 
-**Header size:** 100 bytes, zero padding, all multi-byte fields 8-byte aligned.  
+**Header size:** 104 bytes, zero padding, all multi-byte fields 8-byte aligned.  
 **Byte order:** big-endian for all multi-byte integers.
 
 ```
@@ -21,21 +21,23 @@ Offset  Size  Align  Field            Value / notes
      6     1   —     Frame version    0x02
      7     1   —     Reserved         0x00
      8    32   8 B   Transaction ID   raw 256-bit txid (internal byte order)
-    40     8   8 B   Shard seq num    uint64 BE; sender-assigned; 0 = unset
-    48    32   8 B   Subtree ID       32-byte batch identifier; all-zeros = unset
-    80    16   8 B   Sender ID        original BSV sender IPv6 (net.IP.To16()); all-zeros = unset
-    96     4   4 B   Payload length   uint32; max 10 MiB
-   100     *   —     BSV tx payload   raw serialised transaction bytes
+    40     8   8 B   Sequence ID      uint64 BE; random flow identifier; all-zeros = unset
+    48     8   8 B   Sequence number uint64 BE; sender-assigned; 0 = unset
+    56    32   8 B   Subtree ID       32-byte batch identifier; all-zeros = unset
+    88    16   8 B   Sender ID        original BSV sender IPv6 (net.IP.To16()); all-zeros = unset
+   104     4   8 B   Payload length   uint32; max 10 MiB
+   108     *   —     BSV tx payload   raw serialised transaction bytes
 ```
 
 **Alignment verification:**
 | Field | Offset | Offset % 8 |
 |---|---|---|
 | TXID | 8 | 0 ✓ |
-| ShardSeqNum | 40 | 0 ✓ |
-| SubtreeID | 48 | 0 ✓ |
-| SenderID | 80 | 0 ✓ |
-| PayLen | 96 | 0 ✓ |
+| SequenceID | 40 | 0 ✓ |
+| SeqNum | 48 | 0 ✓ |
+| SubtreeID | 56 | 0 ✓ |
+| SenderID | 88 | 0 ✓ |
+| PayLen | 104 | 0 ✓ |
 
 ### 2.1 Fields
 
@@ -56,24 +58,29 @@ order as used in the BSV P2P protocol — **not** the reversed display order
 shown by block explorers. The top bits of `txid[0:4]` are used by the shard
 engine to derive the multicast group index.
 
-**Shard sequence number (40:48)** — `uint64` big-endian. A per-shard monotonic
-counter assigned by the sender. `0` means unset. Passed through unchanged by
-the proxy.
+**Sequence ID (40:48)** — `uint64` big-endian. A random flow identifier assigned
+by the sender. Combined with SenderID and SeqNum, it uniquely identifies a
+sequenced flow for retransmission requests. Senders reset this value periodically
+(e.g., by packet count or time ~10 minutes). All-zero bytes mean the field is
+unset.
 
-**Subtree ID (48:80)** — 32 bytes. An opaque batch identifier assigned by the
+**Sequence number (48:56)** — `uint64` big-endian. A monotonic counter assigned
+by the sender. `0` means unset. Passed through unchanged by the proxy.
+
+**Subtree ID (56:88)** — 32 bytes. An opaque batch identifier assigned by the
 transaction processor. All-zero bytes mean the field is unset. Passed through
 unchanged by the proxy.
 
-**Sender ID (80:96)** — 16 bytes. The original BSV sender's IP address in
+**Sender ID (88:104)** — 16 bytes. The original BSV sender's IP address in
 `net.IP.To16()` form: native IPv6 for IPv6 sources; `::ffff:a.b.c.d`
 (IPv4-mapped) for IPv4 sources. The proxy stamps this field **in-place** from
 the ingress source address before forwarding. All-zero bytes mean the field is
 unset (only possible if the source address is unknown).
 
-**Payload length (96:100)** — `uint32` big-endian. The number of payload bytes
+**Payload length (104:108)** — `uint32` big-endian. The number of payload bytes
 immediately following the header. Must not exceed 10 MiB.
 
-**Payload (100+)** — Raw serialised BSV transaction. Same format as the BSV P2P
+**Payload (108+)** — Raw serialised BSV transaction. Same format as the BSV P2P
 `tx` message payload (version LE32 + inputs + outputs + locktime LE32). No P2P
 message envelope wraps it.
 
@@ -163,8 +170,8 @@ frames concatenated end-to-end with no additional envelope.
 1. Read 44 bytes (minimum header, sufficient for both v1 and the start of v2).
 2. Inspect `FrameVer` at byte 6.
    - **v1:** header is complete; `PayLen` is at bytes 40–43.
-   - **v2:** read 56 more bytes to complete the 100-byte header;
-     `PayLen` is at bytes 96–99.
+   - **v2:** read 60 more bytes to complete the 104-byte header;
+     `PayLen` is at bytes 104–107.
 3. Read exactly `PayLen` bytes (the payload).
 4. Forward the reassembled raw bytes (SenderID stamped at 80–95 for v2).
 
@@ -197,5 +204,5 @@ a `reason` label (`decode_error`, `write_error`, or `truncated`).
 | `FrameVerV1` | `0x01` | Legacy BRC-12; accepted, forwarded verbatim |
 | `FrameVerV2` | `0x02` | Current |
 | `HeaderSizeV1` | `44` | v1 header bytes |
-| `HeaderSize` | `100` | v2 header bytes |
+| `HeaderSize` | `104` | v2 header bytes |
 | `MaxPayload` | `10485760` | 10 MiB |
