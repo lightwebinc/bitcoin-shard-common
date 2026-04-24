@@ -12,7 +12,7 @@
 //	     6     1  Frame version    0x01
 //	     7     1  Reserved         0x00
 //	     8    32  Transaction ID   raw 256-bit txid
-//	    40     4  Payload length   uint32; max [MaxPayload] bytes
+//	    40     4  Payload length   uint32
 //	    44     *  BSV tx payload
 //
 // # Wire format — BRC-122 (92 bytes)
@@ -29,7 +29,7 @@
 //	    48     4   8B    Shard Sequence Number uint32 BE; monotonic counter; 0 = unset
 //	    52     4   —     Reserved              padding; must be 0x00000000
 //	    56    32   8B    Subtree ID            32-byte batch identifier; zeros = unset
-//	    88     4   8B    Payload length        uint32; max [MaxPayload] bytes
+//	    88     4   8B    Payload length        uint32
 //	    92     *   —     BSV tx payload        raw serialised transaction bytes
 //
 // The txid at offset 8 is in internal byte order (as used in the BSV P2P
@@ -82,10 +82,6 @@ const (
 	// Payload begins at offset HeaderSize.
 	HeaderSize = 92
 
-	// MaxPayload is the maximum accepted payload size. BSV's consensus rule
-	// caps individual transactions well below this; the limit guards against
-	// malformed or malicious frames consuming excessive memory.
-	MaxPayload = 10 * 1024 * 1024 // 10 MiB
 )
 
 // Sentinel errors returned by [Decode].
@@ -96,9 +92,6 @@ var (
 	// ErrBadVer is returned when the frame version byte is neither FrameVerV1
 	// nor FrameVerBRC122.
 	ErrBadVer = errors.New("frame: unsupported frame version")
-
-	// ErrTooLarge is returned when the payload length field exceeds MaxPayload.
-	ErrTooLarge = errors.New("frame: payload length exceeds MaxPayload")
 
 	// ErrTooShort is returned when the datagram is shorter than the minimum
 	// header size ([HeaderSizeLegacy] for v1, [HeaderSize] for BRC-122).
@@ -122,11 +115,8 @@ type Frame struct {
 // Encode serialises f into buf and returns the number of bytes written.
 // buf must be at least HeaderSize + len(f.Payload) bytes long.
 //
-// Returns an error if buf is too small or the payload exceeds [MaxPayload].
+// Returns an error if buf is too small.
 func Encode(f *Frame, buf []byte) (int, error) {
-	if len(f.Payload) > MaxPayload {
-		return 0, ErrTooLarge
-	}
 	total := HeaderSize + len(f.Payload)
 	if len(buf) < total {
 		return 0, fmt.Errorf("frame: buffer too small (%d bytes, need %d)", len(buf), total)
@@ -159,7 +149,7 @@ func Encode(f *Frame, buf []byte) (int, error) {
 //
 // Unknown versions return [ErrBadVer].
 //
-// Possible errors: [ErrTooShort], [ErrBadMagic], [ErrBadVer], [ErrTooLarge],
+// Possible errors: [ErrTooShort], [ErrBadMagic], [ErrBadVer],
 // or [io.ErrUnexpectedEOF] if the datagram is truncated relative to the
 // declared payload length.
 func Decode(buf []byte) (*Frame, error) {
@@ -188,9 +178,6 @@ func decodeV1(buf []byte) (*Frame, error) {
 		return nil, ErrTooShort
 	}
 	payLen := int(binary.BigEndian.Uint32(buf[40:44]))
-	if payLen > MaxPayload {
-		return nil, ErrTooLarge
-	}
 	if len(buf)-HeaderSizeLegacy < payLen {
 		return nil, io.ErrUnexpectedEOF
 	}
@@ -206,9 +193,6 @@ func decodeBRC122(buf []byte) (*Frame, error) {
 		return nil, ErrTooShort
 	}
 	payLen := int(binary.BigEndian.Uint32(buf[88:HeaderSize]))
-	if payLen > MaxPayload {
-		return nil, ErrTooLarge
-	}
 	if len(buf)-HeaderSize < payLen {
 		return nil, io.ErrUnexpectedEOF
 	}

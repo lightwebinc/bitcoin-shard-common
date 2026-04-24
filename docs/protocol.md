@@ -80,7 +80,7 @@ transaction processor. All-zero bytes mean the field is unset. Passed through
 unchanged by the proxy.
 
 **Payload length (88:92)** — `uint32` big-endian. The number of payload bytes
-immediately following the header. Must not exceed 10 MiB.
+immediately following the header. The application determines the maximum accepted size.
 
 **Payload (92+)** — Raw serialised BSV transaction. Same format as the BSV P2P
 `tx` message payload (version LE32 + inputs + outputs + locktime LE32). No P2P
@@ -178,7 +178,7 @@ frames concatenated end-to-end with no additional envelope.
 4. Forward the reassembled raw bytes (SenderID stamped at 40–43 for BRC-122).
 
 The proxy closes the TCP connection on any protocol violation (bad magic,
-unsupported version byte, `PayLen` exceeds 10 MiB, or read error).
+unsupported version byte, or read error).
 
 ---
 
@@ -188,7 +188,6 @@ unsupported version byte, `PayLen` exceeds 10 MiB, or read error).
 |---|---|---|
 | Bad magic | datagram silently dropped | connection closed |
 | Unknown frame version (not v1/BRC-122) | datagram silently dropped | connection closed |
-| PayLen > 10 MiB | datagram silently dropped | connection closed |
 | Truncated datagram | datagram silently dropped | read error → connection closed |
 | Egress write error | logged; next interface attempted | logged; next interface attempted |
 
@@ -207,4 +206,4 @@ a `reason` label (`decode_error`, `write_error`, or `truncated`).
 | `FrameVerBRC122` | `0x02` | Current (BRC-122) |
 | `HeaderSizeLegacy` | `44` | Legacy v1 header bytes |
 | `HeaderSize` | `92` | BRC-122 header bytes |
-| `MaxPayload` | `10485760` | 10 MiB |
+

@@ -258,17 +258,6 @@ func TestDecodeV1Truncated(t *testing.T) {
 	}
 }
 
-func TestDecodeV1TooLarge(t *testing.T) {
-	buf := make([]byte, HeaderSizeLegacy)
-	binary.BigEndian.PutUint32(buf[0:4], MagicBSV)
-	buf[6] = FrameVerV1
-	binary.BigEndian.PutUint32(buf[40:44], uint32(MaxPayload+1))
-	_, err := Decode(buf)
-	if err != ErrTooLarge {
-		t.Errorf("want ErrTooLarge, got %v", err)
-	}
-}
-
 // ── Error paths ───────────────────────────────────────────────────────────────
 
 func TestDecodeErrTooShort(t *testing.T) {
@@ -323,25 +312,5 @@ func TestEncodeBufferTooSmall(t *testing.T) {
 	_, err := Encode(f, make([]byte, 1))
 	if err == nil {
 		t.Fatal("want error for buffer too small, got nil")
-	}
-}
-
-func TestEncodeErrTooLarge(t *testing.T) {
-	f := &Frame{Payload: make([]byte, MaxPayload+1)}
-	_, err := Encode(f, make([]byte, HeaderSize+MaxPayload+1))
-	if err != ErrTooLarge {
-		t.Errorf("want ErrTooLarge, got %v", err)
-	}
-}
-
-func TestDecodeErrTooLarge(t *testing.T) {
-	buf := make([]byte, HeaderSize)
-	buf[0], buf[1], buf[2], buf[3] = 0xE3, 0xE1, 0xF3, 0xE8
-	buf[6] = FrameVerBRC122
-	// Write a payLen that exceeds MaxPayload into bytes 88–91.
-	binary.BigEndian.PutUint32(buf[88:HeaderSize], uint32(MaxPayload+1))
-	_, err := Decode(buf)
-	if err != ErrTooLarge {
-		t.Errorf("want ErrTooLarge, got %v", err)
 	}
 }
