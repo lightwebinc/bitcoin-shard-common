@@ -1,4 +1,4 @@
-// Package frame defines the BSV-over-UDP BRC-12 (v1) and BRC-123 wire formats
+// Package frame defines the BSV-over-UDP BRC-12 (v1) and BRC-122 wire formats
 // used by the BSV transaction sharding pipeline.
 //
 // # Wire format — v1 (44 bytes, legacy BRC-12)
@@ -15,13 +15,13 @@
 //	    40     4  Payload length   uint32; max [MaxPayload] bytes
 //	    44     *  BSV tx payload
 //
-// # Wire format — BRC-123 (92 bytes)
+// # Wire format — BRC-122 (92 bytes)
 //
 //	Offset  Size  Align  Field                 Value / notes
 //	------  ----  -----  -----                 -------------
 //	     0     4   —     Network magic         0xE3E1F3E8 (BSV mainnet P2P magic)
 //	     4     2   —     Protocol ver          0x02BF = 703 (BSV node version baseline)
-//	     6     1   —     Frame version         0x02 (BRC-123)
+//	     6     1   —     Frame version         0x02 (BRC-122)
 //	     7     1   —     Reserved              0x00
 //	     8    32   8B    Transaction ID        raw 256-bit txid (NOT display-reversed)
 //	    40     4   8B    Sender ID             CRC32c of source IPv6; 0 = unset
@@ -38,8 +38,8 @@
 //
 // # v1 handling
 //
-// [Decode] accepts both v1 and BRC-123 frames. v1 frames are decoded into a [Frame]
-// with [Version] = [FrameVerV1] and zero-valued BRC-123 fields.
+// [Decode] accepts both v1 and BRC-122 frames. v1 frames are decoded into a [Frame]
+// with [Version] = [FrameVerV1] and zero-valued BRC-122 fields.
 // The forwarder forwards v1 frames verbatim (no re-encoding).
 // Unknown versions return [ErrBadVer].
 //
@@ -69,16 +69,16 @@ const (
 	ProtoVer uint16 = 0x02BF
 
 	// FrameVerV1 is the legacy v1 frame version (44-byte header). [Decode]
-	// accepts v1 frames and returns them with zero-valued BRC-123-only fields.
+	// accepts v1 frames and returns them with zero-valued BRC-122-only fields.
 	FrameVerV1 byte = 0x01
 
-	// FrameVerBRC123 is the current BRC-123 frame version.
-	FrameVerBRC123 byte = 0x02
+	// FrameVerBRC122 is the current BRC-122 frame version.
+	FrameVerBRC122 byte = 0x02
 
 	// HeaderSizeLegacy is the fixed size of the legacy v1 (BRC-12) frame header.
 	HeaderSizeLegacy = 44
 
-	// HeaderSize is the total size of the BRC-123 frame header in bytes.
+	// HeaderSize is the total size of the BRC-122 frame header in bytes.
 	// Payload begins at offset HeaderSize.
 	HeaderSize = 92
 
@@ -94,23 +94,23 @@ var (
 	ErrBadMagic = errors.New("frame: invalid BSV magic bytes")
 
 	// ErrBadVer is returned when the frame version byte is neither FrameVerV1
-	// nor FrameVerBRC123.
+	// nor FrameVerBRC122.
 	ErrBadVer = errors.New("frame: unsupported frame version")
 
 	// ErrTooLarge is returned when the payload length field exceeds MaxPayload.
 	ErrTooLarge = errors.New("frame: payload length exceeds MaxPayload")
 
 	// ErrTooShort is returned when the datagram is shorter than the minimum
-	// header size ([HeaderSizeLegacy] for v1, [HeaderSize] for BRC-123).
+	// header size ([HeaderSizeLegacy] for v1, [HeaderSize] for BRC-122).
 	ErrTooShort = errors.New("frame: datagram shorter than header")
 )
 
-// Frame is the parsed in-memory representation of a v1 or BRC-123 BSV datagram.
+// Frame is the parsed in-memory representation of a v1 or BRC-122 BSV datagram.
 //
 // Payload is a zero-copy slice pointing into the buffer passed to [Decode];
 // the buffer must remain valid for the lifetime of the Frame.
 type Frame struct {
-	Version     byte     // FrameVerV1 or FrameVerBRC123 — set by Decode
+	Version     byte     // FrameVerV1 or FrameVerBRC122 — set by Decode
 	TxID        [32]byte // Raw 256-bit transaction ID (internal byte order)
 	SenderID    uint32   // CRC32c of source IPv6 address; 0 = unset (always 0 for v1)
 	SequenceID  uint32   // Random flow identifier; 0 = unset (always 0 for v1)
@@ -134,7 +134,7 @@ func Encode(f *Frame, buf []byte) (int, error) {
 
 	binary.BigEndian.PutUint32(buf[0:4], MagicBSV)
 	binary.BigEndian.PutUint16(buf[4:6], ProtoVer)
-	buf[6] = FrameVerBRC123
+	buf[6] = FrameVerBRC122
 	buf[7] = 0
 	copy(buf[8:40], f.TxID[:])
 	binary.BigEndian.PutUint32(buf[40:44], f.SenderID)
@@ -175,14 +175,14 @@ func Decode(buf []byte) (*Frame, error) {
 	switch fver {
 	case FrameVerV1:
 		return decodeV1(buf)
-	case FrameVerBRC123:
-		return decodeBRC123(buf)
+	case FrameVerBRC122:
+		return decodeBRC122(buf)
 	default:
 		return nil, fmt.Errorf("%w: got 0x%02X", ErrBadVer, fver)
 	}
 }
 
-// decodeV1 parses the 44-byte v1 header. BRC-123 fields default to zero.
+// decodeV1 parses the 44-byte v1 header. BRC-122 fields default to zero.
 func decodeV1(buf []byte) (*Frame, error) {
 	if len(buf) < HeaderSizeLegacy {
 		return nil, ErrTooShort
@@ -200,8 +200,8 @@ func decodeV1(buf []byte) (*Frame, error) {
 	return f, nil
 }
 
-// decodeBRC123 parses the 92-byte BRC-123 header.
-func decodeBRC123(buf []byte) (*Frame, error) {
+// decodeBRC122 parses the 92-byte BRC-122 header.
+func decodeBRC122(buf []byte) (*Frame, error) {
 	if len(buf) < HeaderSize {
 		return nil, ErrTooShort
 	}
@@ -212,7 +212,7 @@ func decodeBRC123(buf []byte) (*Frame, error) {
 	if len(buf)-HeaderSize < payLen {
 		return nil, io.ErrUnexpectedEOF
 	}
-	f := &Frame{Version: FrameVerBRC123}
+	f := &Frame{Version: FrameVerBRC122}
 	copy(f.TxID[:], buf[8:40])
 	f.SenderID = binary.BigEndian.Uint32(buf[40:44])
 	f.SequenceID = binary.BigEndian.Uint32(buf[44:48])

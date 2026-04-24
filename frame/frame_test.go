@@ -33,9 +33,9 @@ func TestFrameVerV1(t *testing.T) {
 	}
 }
 
-func TestFrameVerBRC123(t *testing.T) {
-	if FrameVerBRC123 != 0x02 {
-		t.Errorf("FrameVerBRC123 = 0x%02X, want 0x02", FrameVerBRC123)
+func TestFrameVerBRC122(t *testing.T) {
+	if FrameVerBRC122 != 0x02 {
+		t.Errorf("FrameVerBRC122 = 0x%02X, want 0x02", FrameVerBRC122)
 	}
 }
 
@@ -132,8 +132,8 @@ func TestFieldOffsets(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if buf[6] != FrameVerBRC123 {
-		t.Errorf("buf[6] (FrameVer) = 0x%02X, want 0x%02X", buf[6], FrameVerBRC123)
+	if buf[6] != FrameVerBRC122 {
+		t.Errorf("buf[6] (FrameVer) = 0x%02X, want 0x%02X", buf[6], FrameVerBRC122)
 	}
 	if buf[7] != 0 {
 		t.Errorf("buf[7] (Reserved) = 0x%02X, want 0x00", buf[7])
@@ -219,7 +219,7 @@ func TestDecodeV1Basic(t *testing.T) {
 	}
 }
 
-func TestDecodeV1ZeroedBRC123Fields(t *testing.T) {
+func TestDecodeV1ZeroedBRC122Fields(t *testing.T) {
 	raw := buildV1Frame(0x01, nil)
 	f, err := Decode(raw)
 	if err != nil {
@@ -279,14 +279,14 @@ func TestDecodeErrTooShort(t *testing.T) {
 	}
 }
 
-func TestDecodeBRC123ErrTooShort(t *testing.T) {
-	// Long enough for v1 but not BRC-123
+func TestDecodeBRC122ErrTooShort(t *testing.T) {
+	// Long enough for v1 but not BRC-122
 	buf := make([]byte, HeaderSizeLegacy)
 	binary.BigEndian.PutUint32(buf[0:4], MagicBSV)
-	buf[6] = FrameVerBRC123
+	buf[6] = FrameVerBRC122
 	_, err := Decode(buf)
 	if err != ErrTooShort {
-		t.Errorf("want ErrTooShort for BRC-123 with only %d bytes, got %v", HeaderSizeLegacy, err)
+		t.Errorf("want ErrTooShort for BRC-122 with only %d bytes, got %v", HeaderSizeLegacy, err)
 	}
 }
 
@@ -337,7 +337,7 @@ func TestEncodeErrTooLarge(t *testing.T) {
 func TestDecodeErrTooLarge(t *testing.T) {
 	buf := make([]byte, HeaderSize)
 	buf[0], buf[1], buf[2], buf[3] = 0xE3, 0xE1, 0xF3, 0xE8
-	buf[6] = FrameVerBRC123
+	buf[6] = FrameVerBRC122
 	// Write a payLen that exceeds MaxPayload into bytes 88–91.
 	binary.BigEndian.PutUint32(buf[88:HeaderSize], uint32(MaxPayload+1))
 	_, err := Decode(buf)
