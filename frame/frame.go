@@ -107,7 +107,7 @@ type Frame struct {
 	TxID        [32]byte // Raw 256-bit transaction ID (internal byte order)
 	SenderID    uint32   // CRC32c of source IPv6 address; 0 = unset (always 0 for v1)
 	SequenceID  uint32   // Random flow identifier; 0 = unset (always 0 for v1)
-	ShardSeqNum uint32   // Monotonic sequence number; 0 = unset (always 0 for v1)
+	SeqNum uint32   // Monotonic sequence number; 0 = unset (always 0 for v1)
 	SubtreeID   [32]byte // 32-byte batch identifier; zeros = unset (always zero for v1)
 	Payload     []byte   // Raw serialised BSV transaction
 }
@@ -129,7 +129,7 @@ func Encode(f *Frame, buf []byte) (int, error) {
 	copy(buf[8:40], f.TxID[:])
 	binary.BigEndian.PutUint32(buf[40:44], f.SenderID)
 	binary.BigEndian.PutUint32(buf[44:48], f.SequenceID)
-	binary.BigEndian.PutUint32(buf[48:52], f.ShardSeqNum)
+	binary.BigEndian.PutUint32(buf[48:52], f.SeqNum)
 	binary.BigEndian.PutUint32(buf[52:56], 0) // reserved padding
 	copy(buf[56:88], f.SubtreeID[:])
 	binary.BigEndian.PutUint32(buf[88:92], uint32(len(f.Payload)))
@@ -144,7 +144,7 @@ func Encode(f *Frame, buf []byte) (int, error) {
 // not modify or reuse buf while the Frame is in scope.
 //
 // v1 frames (FrameVer 0x01) are decoded with [Version] = FrameVerV1 and
-// zero-valued ShardSeqNum, SubtreeID, SenderID, and SequenceID. The forwarder
+// zero-valued SeqNum, SubtreeID, SenderID, and SequenceID. The forwarder
 // forwards v1 frames verbatim (no re-encoding).
 //
 // Unknown versions return [ErrBadVer].
@@ -200,7 +200,7 @@ func decodeBRC122(buf []byte) (*Frame, error) {
 	copy(f.TxID[:], buf[8:40])
 	f.SenderID = binary.BigEndian.Uint32(buf[40:44])
 	f.SequenceID = binary.BigEndian.Uint32(buf[44:48])
-	f.ShardSeqNum = binary.BigEndian.Uint32(buf[48:52])
+	f.SeqNum = binary.BigEndian.Uint32(buf[48:52])
 	copy(f.SubtreeID[:], buf[56:88])
 	f.Payload = buf[HeaderSize : HeaderSize+payLen]
 	return f, nil

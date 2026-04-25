@@ -32,11 +32,11 @@ Offset  Size  Align  Field                 Value / notes
 
 **Alignment verification:**
 | Field | Offset | Offset % 8 |
-|---|---|---|
+|------------|--------|------------|
 | TXID | 8 | 0 ✓ |
 | SenderID | 40 | 0 ✓ |
 | SequenceID | 44 | 4 |
-| ShardSeqNum | 48 | 0 ✓ |
+| SeqNum | 48 | 0 ✓ |
 | Reserved | 52 | 4 |
 | SubtreeID | 56 | 0 ✓ |
 | PayLen | 88 | 0 ✓ |
@@ -66,7 +66,7 @@ of the original BSV sender's IPv6 address. The proxy stamps this field
 networks (~1,000 mining nodes, ~12-20 core transaction processors). `0` means unset.
 
 **Sequence ID (44:48)** — `uint32` big-endian. A random flow identifier assigned
-by the sender. Combined with SenderID and ShardSeqNum, it uniquely identifies a
+by the sender. Combined with SenderID and SeqNum, it uniquely identifies a
 sequenced flow for retransmission requests. Senders reset this value periodically
 (e.g., by packet count or time ~10 minutes). `0` means unset.
 
@@ -185,7 +185,7 @@ unsupported version byte, or read error).
 ## 8. Error Handling
 
 | Condition | UDP | TCP |
-|---|---|---|
+|----------------------------------------|----------------------------------|----------------------------------|
 | Bad magic | datagram silently dropped | connection closed |
 | Unknown frame version (not v1/BRC-122) | datagram silently dropped | connection closed |
 | Truncated datagram | datagram silently dropped | read error → connection closed |
@@ -199,7 +199,7 @@ a `reason` label (`decode_error`, `write_error`, or `truncated`).
 ## 9. Constants Reference
 
 | Name | Value | Notes |
-|---|---|---|
+|--------------------|--------------|---------------------------------------------|
 | `MagicBSV` | `0xE3E1F3E8` | BSV mainnet P2P magic |
 | `ProtoVer` | `0x02BF` | Protocol version 703 |
 | `FrameVerV1` | `0x01` | Legacy BRC-12; accepted, forwarded verbatim |

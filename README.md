@@ -13,7 +13,7 @@ Shared protocol primitives for the BSV transaction sharding pipeline.
 ## Consumers
 
 | Repo | Uses |
-|---|---|
+|-----------------------------------------------------------------------------------|------------------------------|
 | [`bitcoin-shard-proxy`](https://github.com/lightwebinc/bitcoin-shard-proxy) | `frame`, `shard`, `sequence` |
 | [`bitcoin-shard-listener`](https://github.com/lightwebinc/bitcoin-shard-listener) | `frame`, `shard`, `sequence` |
 

@@ -45,7 +45,7 @@ func TestRoundTrip(t *testing.T) {
 	payload := []byte("fake-bsv-tx-payload")
 	f := &Frame{
 		Payload:     payload,
-		ShardSeqNum: 0x01020304,
+		SeqNum: 0x01020304,
 		SequenceID:  0xAABBCCDD,
 		SenderID:    0x11223344,
 	}
@@ -70,8 +70,8 @@ func TestRoundTrip(t *testing.T) {
 	if got.TxID != f.TxID {
 		t.Errorf("TxID mismatch: got %x, want %x", got.TxID, f.TxID)
 	}
-	if got.ShardSeqNum != f.ShardSeqNum {
-		t.Errorf("ShardSeqNum = %d, want %d", got.ShardSeqNum, f.ShardSeqNum)
+	if got.SeqNum != f.SeqNum {
+		t.Errorf("SeqNum = %d, want %d", got.SeqNum, f.SeqNum)
 	}
 	if got.SubtreeID != f.SubtreeID {
 		t.Errorf("SubtreeID mismatch")
@@ -91,7 +91,7 @@ func TestRoundTripWithSenderID(t *testing.T) {
 	payload := []byte("tx-with-sender")
 	f := &Frame{
 		Payload:     payload,
-		ShardSeqNum: 42,
+		SeqNum: 42,
 		SequenceID:  0x11223344,
 		SenderID:    0xAABBCCDD,
 	}
@@ -119,7 +119,7 @@ func TestFieldOffsets(t *testing.T) {
 	f := &Frame{
 		SenderID:    0xAABBCCDD,
 		SequenceID:  0x12345678,
-		ShardSeqNum: 0xDEADBEEF,
+		SeqNum: 0xDEADBEEF,
 	}
 	f.TxID[0] = 0x11
 	for i := range f.SubtreeID {
@@ -148,7 +148,7 @@ func TestFieldOffsets(t *testing.T) {
 		t.Errorf("buf[44:48] (SequenceID) mismatch")
 	}
 	if binary.BigEndian.Uint32(buf[48:52]) != 0xDEADBEEF {
-		t.Errorf("buf[48:52] (ShardSeqNum) mismatch")
+		t.Errorf("buf[48:52] (SeqNum) mismatch")
 	}
 	if buf[52] != 0x00 || buf[53] != 0x00 || buf[54] != 0x00 || buf[55] != 0x00 {
 		t.Errorf("buf[52:56] (Reserved) should be zero")
@@ -225,8 +225,8 @@ func TestDecodeV1ZeroedBRC122Fields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Decode v1: %v", err)
 	}
-	if f.ShardSeqNum != 0 {
-		t.Errorf("ShardSeqNum = %d, want 0", f.ShardSeqNum)
+	if f.SeqNum != 0 {
+		t.Errorf("SeqNum = %d, want 0", f.SeqNum)
 	}
 	if f.SubtreeID != ([32]byte{}) {
 		t.Error("SubtreeID should be all zeros for v1")
