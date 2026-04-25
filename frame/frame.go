@@ -107,7 +107,7 @@ type Frame struct {
 	TxID        [32]byte // Raw 256-bit transaction ID (internal byte order)
 	SenderID    uint32   // CRC32c of source IPv6 address; 0 = unset (always 0 for v1)
 	SequenceID  uint32   // Random flow identifier; 0 = unset (always 0 for v1)
-	SeqNum uint32   // Monotonic sequence number; 0 = unset (always 0 for v1)
+	SeqNum uint32 // Monotonic sequence number; 0 = unset (always 0 for v1)
 	SubtreeID   [32]byte // 32-byte batch identifier; zeros = unset (always zero for v1)
 	Payload     []byte   // Raw serialised BSV transaction
 }
