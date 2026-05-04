@@ -8,7 +8,7 @@ with the BSV mainnet P2P network magic so that standard firewall rules and
 network monitors already configured for BSV traffic classify shard datagrams
 correctly.
 
-## 2. BRC-122 Frame Format (current)
+## 2. BRC-124 Frame Format (current)
 
 **Header size:** 92 bytes.  
 **Byte order:** big-endian for all multi-byte integers.
@@ -18,7 +18,7 @@ Offset  Size  Align  Field                 Value / notes
 ------  ----  -----  -----                 -------------
      0     4   —     Network magic         0xE3E1F3E8 (BSV mainnet P2P magic)
      4     2   —     Protocol ver          0x02BF = 703
-     6     1   —     Frame version         0x02 (BRC-122)
+     6     1   —     Frame version         0x02 (BRC-124)
      7     1   —     Reserved              0x00
      8    32   8B    Transaction ID        raw 256-bit txid (internal byte order)
     40     4   8B    Sender ID             CRC32c of IPv6; 0 = unset
@@ -50,8 +50,8 @@ Frames that do not start with this value are rejected.
 baseline that introduced the large-block policy. This field is informational;
 receivers do not validate it.
 
-**Frame version (6)** — `0x02` for BRC-122, `0x01` for v1 (see §3). Any other
-value is rejected. Both v1 and BRC-122 frames are forwarded verbatim.
+**Frame version (6)** — `0x02` for BRC-124, `0x01` for v1 (see §3). Any other
+value is rejected. Both v1 and BRC-124 frames are forwarded verbatim.
 
 **Reserved (7)** — Must be `0x00`. Reserved for future use.
 
@@ -90,7 +90,7 @@ message envelope wraps it.
 
 ## 3. Legacy BRC-12 Frame Format (v1)
 
-Legacy v1 frames use a 44-byte header and carry no BRC-122 fields.
+Legacy v1 frames use a 44-byte header and carry no BRC-124 fields.
 The proxy accepts them and forwards them verbatim without modification.
 
 ```text
@@ -106,8 +106,8 @@ Offset  Size  Field
 ```
 
 **TCP ingress:** the TCP reader reads 44 bytes first to detect the version, then
-completes the header read if BRC-122 (48 more bytes). No separate port is needed
-for v1 and BRC-122 — both versions share the same listener.
+completes the header read if BRC-124 (48 more bytes). No separate port is needed
+for v1 and BRC-124 — both versions share the same listener.
 
 ---
 
@@ -151,11 +151,11 @@ additional groups; no existing subscriptions become invalid.
 
 The proxy processes each incoming datagram in two steps:
 
-1. **Decode** — parse the frame header (v1 or BRC-122); drop with a debug log on
+1. **Decode** — parse the frame header (v1 or BRC-124); drop with a debug log on
    bad magic, unsupported version, oversized payload, or truncated datagram.
    The TxID is extracted to derive the destination multicast group.
 
-2. **Forward** — for BRC-122 frames, overwrite `raw[40:44]` in-place with the
+2. **Forward** — for BRC-124 frames, overwrite `raw[40:44]` in-place with the
    CRC32c of the ingress source IPv6 address (`SenderID`) before forwarding.
    Write the raw bytes to every configured egress interface via `IPV6_MULTICAST_IF`.
    v1 frames are forwarded verbatim without modification.
@@ -165,17 +165,17 @@ The proxy processes each incoming datagram in two steps:
 ## 7. TCP Ingress
 
 When `-tcp-listen-port` is non-zero, the proxy also accepts TCP connections for
-reliable frame delivery. The TCP wire format is identical to UDP: v1 or BRC-122
+reliable frame delivery. The TCP wire format is identical to UDP: v1 or BRC-124
 frames concatenated end-to-end with no additional envelope.
 
 **Read sequence per frame:**
-1. Read 44 bytes (minimum header, sufficient for both v1 and the start of BRC-122).
+1. Read 44 bytes (minimum header, sufficient for both v1 and the start of BRC-124).
 2. Inspect `FrameVer` at byte 6.
    - **v1:** header is complete; `PayLen` is at bytes 40–43.
-   - **BRC-122:** read 48 more bytes to complete the 92-byte header;
+   - **BRC-124:** read 48 more bytes to complete the 92-byte header;
      `PayLen` is at bytes 88–91.
 3. Read exactly `PayLen` bytes (the payload).
-4. Forward the reassembled raw bytes (SenderID stamped at 40–43 for BRC-122).
+4. Forward the reassembled raw bytes (SenderID stamped at 40–43 for BRC-124).
 
 The proxy closes the TCP connection on any protocol violation (bad magic,
 unsupported version byte, or read error).
@@ -187,7 +187,7 @@ unsupported version byte, or read error).
 | Condition | UDP | TCP |
 |----------------------------------------|----------------------------------|----------------------------------|
 | Bad magic | datagram silently dropped | connection closed |
-| Unknown frame version (not v1/BRC-122) | datagram silently dropped | connection closed |
+| Unknown frame version (not v1/BRC-124) | datagram silently dropped | connection closed |
 | Truncated datagram | datagram silently dropped | read error → connection closed |
 | Egress write error | logged; next interface attempted | logged; next interface attempted |
 
@@ -203,7 +203,7 @@ a `reason` label (`decode_error`, `write_error`, or `truncated`).
 | `MagicBSV` | `0xE3E1F3E8` | BSV mainnet P2P magic |
 | `ProtoVer` | `0x02BF` | Protocol version 703 |
 | `FrameVerV1` | `0x01` | Legacy BRC-12; accepted, forwarded verbatim |
-| `FrameVerBRC122` | `0x02` | Current (BRC-122) |
+| `FrameVerBRC122` | `0x02` | Current (BRC-124) |
 | `HeaderSizeLegacy` | `44` | Legacy v1 header bytes |
-| `HeaderSize` | `92` | BRC-122 header bytes |
+| `HeaderSize` | `92` | BRC-124 header bytes |
 

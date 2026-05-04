@@ -269,13 +269,13 @@ func TestDecodeErrTooShort(t *testing.T) {
 }
 
 func TestDecodeBRC122ErrTooShort(t *testing.T) {
-	// Long enough for v1 but not BRC-122
+	// Long enough for v1 but not BRC-124
 	buf := make([]byte, HeaderSizeLegacy)
 	binary.BigEndian.PutUint32(buf[0:4], MagicBSV)
 	buf[6] = FrameVerBRC122
 	_, err := Decode(buf)
 	if err != ErrTooShort {
-		t.Errorf("want ErrTooShort for BRC-122 with only %d bytes, got %v", HeaderSizeLegacy, err)
+		t.Errorf("want ErrTooShort for BRC-124 with only %d bytes, got %v", HeaderSizeLegacy, err)
 	}
 }
 
