@@ -82,19 +82,19 @@ const (
 	// Payload begins at offset HeaderSize.
 	HeaderSize = 92
 
-	// MsgTypeNACK identifies a gap-retransmission request (BRC-125).
+	// MsgTypeNACK identifies a gap-retransmission request (BRC-TBD-retransmission).
 	MsgTypeNACK byte = 0x10
 
 	// MsgTypeMISS identifies a "frame not in cache" response from a retry
-	// endpoint (BRC-125).
+	// endpoint (BRC-TBD-retransmission).
 	MsgTypeMISS byte = 0x11
 
 	// MsgTypeACK identifies a "frame found, retransmit dispatched" response
-	// from a retry endpoint (BRC-125).
+	// from a retry endpoint (BRC-TBD-retransmission).
 	MsgTypeACK byte = 0x12
 
 	// MsgTypeADVERT identifies a periodic beacon advertisement from a retry
-	// endpoint (BRC-125).
+	// endpoint (BRC-TBD-retransmission).
 	MsgTypeADVERT byte = 0x20
 )
 
