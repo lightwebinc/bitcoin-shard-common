@@ -203,7 +203,7 @@ a `reason` label (`decode_error`, `write_error`, or `truncated`).
 | `MagicBSV` | `0xE3E1F3E8` | BSV mainnet P2P magic |
 | `ProtoVer` | `0x02BF` | Protocol version 703 |
 | `FrameVerV1` | `0x01` | Legacy BRC-12; accepted, forwarded verbatim |
-| `FrameVerBRC122` | `0x02` | Current (BRC-124) |
+| `FrameVerV2` | `0x02` | Current (BRC-124) |
 | `HeaderSizeLegacy` | `44` | Legacy v1 header bytes |
 | `HeaderSize` | `92` | BRC-124 header bytes |
 
