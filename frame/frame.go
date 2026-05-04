@@ -82,6 +82,20 @@ const (
 	// Payload begins at offset HeaderSize.
 	HeaderSize = 92
 
+	// MsgTypeNACK identifies a gap-retransmission request (BRC-125).
+	MsgTypeNACK byte = 0x10
+
+	// MsgTypeMISS identifies a "frame not in cache" response from a retry
+	// endpoint (BRC-125).
+	MsgTypeMISS byte = 0x11
+
+	// MsgTypeACK identifies a "frame found, retransmit dispatched" response
+	// from a retry endpoint (BRC-125).
+	MsgTypeACK byte = 0x12
+
+	// MsgTypeADVERT identifies a periodic beacon advertisement from a retry
+	// endpoint (BRC-125).
+	MsgTypeADVERT byte = 0x20
 )
 
 // Sentinel errors returned by [Decode].
@@ -103,13 +117,13 @@ var (
 // Payload is a zero-copy slice pointing into the buffer passed to [Decode];
 // the buffer must remain valid for the lifetime of the Frame.
 type Frame struct {
-	Version     byte     // FrameVerV1 or FrameVerBRC122 — set by Decode
-	TxID        [32]byte // Raw 256-bit transaction ID (internal byte order)
-	SenderID    uint32   // CRC32c of source IPv6 address; 0 = unset (always 0 for v1)
-	SequenceID  uint32   // Random flow identifier; 0 = unset (always 0 for v1)
-	SeqNum uint32 // Monotonic sequence number; 0 = unset (always 0 for v1)
-	SubtreeID   [32]byte // 32-byte batch identifier; zeros = unset (always zero for v1)
-	Payload     []byte   // Raw serialised BSV transaction
+	Version    byte     // FrameVerV1 or FrameVerBRC122 — set by Decode
+	TxID       [32]byte // Raw 256-bit transaction ID (internal byte order)
+	SenderID   uint32   // CRC32c of source IPv6 address; 0 = unset (always 0 for v1)
+	SequenceID uint32   // Random flow identifier; 0 = unset (always 0 for v1)
+	SeqNum     uint32   // Monotonic sequence number; 0 = unset (always 0 for v1)
+	SubtreeID  [32]byte // 32-byte batch identifier; zeros = unset (always zero for v1)
+	Payload    []byte   // Raw serialised BSV transaction
 }
 
 // Encode serialises f into buf and returns the number of bytes written.
