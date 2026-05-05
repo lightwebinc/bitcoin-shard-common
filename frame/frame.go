@@ -17,29 +17,31 @@
 //
 // # Wire format — BRC-124 (92 bytes)
 //
-//	Offset  Size  Align  Field                 Value / notes
-//	------  ----  -----  -----                 -------------
-//	     0     4   —     Network magic         0xE3E1F3E8 (BSV mainnet P2P magic)
-//	     4     2   —     Protocol ver          0x02BF = 703 (BSV node version baseline)
-//	     6     1   —     Frame version         0x02 (BRC-124)
-//	     7     1   —     Reserved              0x00
-//	     8    32   8B    Transaction ID        raw 256-bit txid (NOT display-reversed)
-//	    40     4   8B    Sender ID             CRC32c of source IPv6; 0 = unset
-//	    44     4   —     Sequence ID           uint32 BE; random flow identifier; 0 = unset
-//	    48     4   8B    Shard Sequence Number uint32 BE; monotonic counter; 0 = unset
-//	    52     4   —     Reserved              padding; must be 0x00000000
-//	    56    32   8B    Subtree ID            32-byte batch identifier; zeros = unset
-//	    88     4   8B    Payload length        uint32
-//	    92     *   —     BSV tx payload        raw serialised transaction bytes
+// All multi-byte integers are big-endian.
 //
-// The txid at offset 8 is in internal byte order (as used in the BSV P2P
-// protocol and raw transaction data), not the reversed display order shown
-// by block explorers.
+//	Offset  Size  Align  Field          Value / notes
+//	------  ----  -----  -----          -------------
+//	     0     4   —     Network magic  0xE3E1F3E8 (BSV mainnet P2P magic)
+//	     4     2   —     Protocol ver   0x02BF = 703 (BSV node version baseline)
+//	     6     1   —     Frame version  0x02 (BRC-124)
+//	     7     1   —     Reserved       0x00
+//	     8    32   8B    TxID           raw 256-bit txid (NOT display-reversed)
+//	    40     8   8B    PrevSeq        XXH64 of previous chain state; 0 = unset
+//	    48     8   8B    CurSeq         XXH64 of current chain state; 0 = unset
+//	    56    32   8B    SubtreeID      32-byte batch identifier; zeros = unset
+//	    88     4   8B    PayloadLen     uint32 BE
+//	    92     *   —     Payload        raw serialised BSV transaction
+//
+// PrevSeq and CurSeq form a hash chain: each frame's PrevSeq equals the
+// CurSeq of its predecessor in the sender's sequence. Both are computed by
+// the proxy (bitcoin-shard-proxy) as XXH64(senderIPv6 ∥ groupIdx ∥ counter)
+// and stamped in-place before multicast forwarding. Senders set both to 0.
+// Chain breaks (PrevSeq ≠ expected) indicate missing frames, triggering NACK.
 //
 // # v1 handling
 //
 // [Decode] accepts both v1 and BRC-124 frames. v1 frames are decoded into a [Frame]
-// with [Version] = [FrameVerV1] and zero-valued BRC-124 fields.
+// with [Version] = [FrameVerV1] and zero-valued BRC-124-only fields.
 // The forwarder forwards v1 frames verbatim (no re-encoding).
 // Unknown versions return [ErrBadVer].
 //
@@ -117,13 +119,12 @@ var (
 // Payload is a zero-copy slice pointing into the buffer passed to [Decode];
 // the buffer must remain valid for the lifetime of the Frame.
 type Frame struct {
-	Version    byte     // FrameVerV1 or FrameVerV2 — set by Decode
-	TxID       [32]byte // Raw 256-bit transaction ID (internal byte order)
-	SenderID   uint32   // CRC32c of source IPv6 address; 0 = unset (always 0 for v1)
-	SequenceID uint32   // Random flow identifier; 0 = unset (always 0 for v1)
-	SeqNum     uint32   // Monotonic sequence number; 0 = unset (always 0 for v1)
-	SubtreeID  [32]byte // 32-byte batch identifier; zeros = unset (always zero for v1)
-	Payload    []byte   // Raw serialised BSV transaction
+	Version   byte     // FrameVerV1 or FrameVerV2 — set by Decode
+	TxID      [32]byte // Raw 256-bit transaction ID (internal byte order)
+	PrevSeq   uint64   // XXH64 of previous chain state; 0 = unset (always 0 for v1)
+	CurSeq    uint64   // XXH64 of current chain state; 0 = unset (always 0 for v1)
+	SubtreeID [32]byte // 32-byte batch identifier; zeros = unset (always zero for v1)
+	Payload   []byte   // Raw serialised BSV transaction
 }
 
 // Encode serialises f into buf and returns the number of bytes written.
@@ -141,10 +142,8 @@ func Encode(f *Frame, buf []byte) (int, error) {
 	buf[6] = FrameVerV2
 	buf[7] = 0
 	copy(buf[8:40], f.TxID[:])
-	binary.BigEndian.PutUint32(buf[40:44], f.SenderID)
-	binary.BigEndian.PutUint32(buf[44:48], f.SequenceID)
-	binary.BigEndian.PutUint32(buf[48:52], f.SeqNum)
-	binary.BigEndian.PutUint32(buf[52:56], 0) // reserved padding
+	binary.BigEndian.PutUint64(buf[40:48], f.PrevSeq)
+	binary.BigEndian.PutUint64(buf[48:56], f.CurSeq)
 	copy(buf[56:88], f.SubtreeID[:])
 	binary.BigEndian.PutUint32(buf[88:92], uint32(len(f.Payload)))
 	copy(buf[92:], f.Payload)
@@ -158,8 +157,8 @@ func Encode(f *Frame, buf []byte) (int, error) {
 // not modify or reuse buf while the Frame is in scope.
 //
 // v1 frames (FrameVer 0x01) are decoded with [Version] = FrameVerV1 and
-// zero-valued SeqNum, SubtreeID, SenderID, and SequenceID. The forwarder
-// forwards v1 frames verbatim (no re-encoding).
+// zero-valued PrevSeq, CurSeq, and SubtreeID. The forwarder forwards v1
+// frames verbatim (no re-encoding).
 //
 // Unknown versions return [ErrBadVer].
 //
@@ -212,9 +211,8 @@ func decodeV2(buf []byte) (*Frame, error) {
 	}
 	f := &Frame{Version: FrameVerV2}
 	copy(f.TxID[:], buf[8:40])
-	f.SenderID = binary.BigEndian.Uint32(buf[40:44])
-	f.SequenceID = binary.BigEndian.Uint32(buf[44:48])
-	f.SeqNum = binary.BigEndian.Uint32(buf[48:52])
+	f.PrevSeq = binary.BigEndian.Uint64(buf[40:48])
+	f.CurSeq = binary.BigEndian.Uint64(buf[48:56])
 	copy(f.SubtreeID[:], buf[56:88])
 	f.Payload = buf[HeaderSize : HeaderSize+payLen]
 	return f, nil

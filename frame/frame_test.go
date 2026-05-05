@@ -44,10 +44,9 @@ func TestFrameVerV2(t *testing.T) {
 func TestRoundTrip(t *testing.T) {
 	payload := []byte("fake-bsv-tx-payload")
 	f := &Frame{
-		Payload:     payload,
-		SeqNum: 0x01020304,
-		SequenceID:  0xAABBCCDD,
-		SenderID:    0x11223344,
+		Payload: payload,
+		PrevSeq: 0x0102030405060708,
+		CurSeq:  0xAABBCCDDEEFF0011,
 	}
 	f.TxID[0] = 0xAB
 	for i := range f.SubtreeID {
@@ -70,30 +69,26 @@ func TestRoundTrip(t *testing.T) {
 	if got.TxID != f.TxID {
 		t.Errorf("TxID mismatch: got %x, want %x", got.TxID, f.TxID)
 	}
-	if got.SeqNum != f.SeqNum {
-		t.Errorf("SeqNum = %d, want %d", got.SeqNum, f.SeqNum)
+	if got.PrevSeq != f.PrevSeq {
+		t.Errorf("PrevSeq = %d, want %d", got.PrevSeq, f.PrevSeq)
+	}
+	if got.CurSeq != f.CurSeq {
+		t.Errorf("CurSeq = %d, want %d", got.CurSeq, f.CurSeq)
 	}
 	if got.SubtreeID != f.SubtreeID {
 		t.Errorf("SubtreeID mismatch")
-	}
-	if got.SenderID != f.SenderID {
-		t.Errorf("SenderID mismatch: got %x, want %x", got.SenderID, f.SenderID)
-	}
-	if got.SequenceID != f.SequenceID {
-		t.Errorf("SequenceID = %d, want %d", got.SequenceID, f.SequenceID)
 	}
 	if !bytes.Equal(got.Payload, payload) {
 		t.Errorf("Payload mismatch: got %q, want %q", got.Payload, payload)
 	}
 }
 
-func TestRoundTripWithSenderID(t *testing.T) {
-	payload := []byte("tx-with-sender")
+func TestRoundTripHashChain(t *testing.T) {
+	payload := []byte("tx-with-chain")
 	f := &Frame{
-		Payload:     payload,
-		SeqNum: 42,
-		SequenceID:  0x11223344,
-		SenderID:    0xAABBCCDD,
+		Payload: payload,
+		PrevSeq: 0xDEADBEEFCAFEBABE,
+		CurSeq:  0x0123456789ABCDEF,
 	}
 	f.TxID[0] = 0xCC
 
@@ -105,11 +100,11 @@ func TestRoundTripWithSenderID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Decode: %v", err)
 	}
-	if got.SenderID != f.SenderID {
-		t.Errorf("SenderID mismatch: got %x, want %x", got.SenderID, f.SenderID)
+	if got.PrevSeq != f.PrevSeq {
+		t.Errorf("PrevSeq mismatch: got %x, want %x", got.PrevSeq, f.PrevSeq)
 	}
-	if got.SequenceID != f.SequenceID {
-		t.Errorf("SequenceID mismatch: got %d, want %d", got.SequenceID, f.SequenceID)
+	if got.CurSeq != f.CurSeq {
+		t.Errorf("CurSeq mismatch: got %x, want %x", got.CurSeq, f.CurSeq)
 	}
 }
 
@@ -117,9 +112,8 @@ func TestRoundTripWithSenderID(t *testing.T) {
 
 func TestFieldOffsets(t *testing.T) {
 	f := &Frame{
-		SenderID:    0xAABBCCDD,
-		SequenceID:  0x12345678,
-		SeqNum: 0xDEADBEEF,
+		PrevSeq: 0xAABBCCDDEEFF0011,
+		CurSeq:  0x1122334455667788,
 	}
 	f.TxID[0] = 0x11
 	for i := range f.SubtreeID {
@@ -141,17 +135,11 @@ func TestFieldOffsets(t *testing.T) {
 	if buf[8] != 0x11 {
 		t.Errorf("buf[8] (TxID[0]) = 0x%02X, want 0x11", buf[8])
 	}
-	if binary.BigEndian.Uint32(buf[40:44]) != 0xAABBCCDD {
-		t.Errorf("buf[40:44] (SenderID) mismatch")
+	if binary.BigEndian.Uint64(buf[40:48]) != 0xAABBCCDDEEFF0011 {
+		t.Errorf("buf[40:48] (PrevSeq) = %x, want 0xAABBCCDDEEFF0011", binary.BigEndian.Uint64(buf[40:48]))
 	}
-	if binary.BigEndian.Uint32(buf[44:48]) != 0x12345678 {
-		t.Errorf("buf[44:48] (SequenceID) mismatch")
-	}
-	if binary.BigEndian.Uint32(buf[48:52]) != 0xDEADBEEF {
-		t.Errorf("buf[48:52] (SeqNum) mismatch")
-	}
-	if buf[52] != 0x00 || buf[53] != 0x00 || buf[54] != 0x00 || buf[55] != 0x00 {
-		t.Errorf("buf[52:56] (Reserved) should be zero")
+	if binary.BigEndian.Uint64(buf[48:56]) != 0x1122334455667788 {
+		t.Errorf("buf[48:56] (CurSeq) = %x, want 0x1122334455667788", binary.BigEndian.Uint64(buf[48:56]))
 	}
 	if buf[56] != 0xCC {
 		t.Errorf("buf[56] (SubtreeID[0]) = 0x%02X, want 0xCC", buf[56])
@@ -225,17 +213,14 @@ func TestDecodeV1ZeroedV2Fields(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Decode v1: %v", err)
 	}
-	if f.SeqNum != 0 {
-		t.Errorf("SeqNum = %d, want 0", f.SeqNum)
+	if f.PrevSeq != 0 {
+		t.Errorf("PrevSeq = %d, want 0", f.PrevSeq)
+	}
+	if f.CurSeq != 0 {
+		t.Errorf("CurSeq = %d, want 0", f.CurSeq)
 	}
 	if f.SubtreeID != ([32]byte{}) {
 		t.Error("SubtreeID should be all zeros for v1")
-	}
-	if f.SenderID != 0 {
-		t.Errorf("SenderID = %d, want 0", f.SenderID)
-	}
-	if f.SequenceID != 0 {
-		t.Errorf("SequenceID = %d, want 0", f.SequenceID)
 	}
 }
 
